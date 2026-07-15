@@ -27,7 +27,7 @@ jobs:
           path: ${{ steps.practices.outputs.output-file }}
 ```
 
-The preview downloads the current, versioned 15-row sample from the public [Practice Radar data repository](https://github.com/unitedideas/practice-radar-data). It does not create an Apify run or incur a charge.
+The preview downloads the current, versioned 15-row sample from the public [Practice Radar data repository](https://github.com/unitedideas/practice-radar-data). It does not create an Apify run or incur a charge. The workflow summary reports the delivered count, CMS weekly period, state filter, source, and data limitation before the optional full-edition handoff.
 
 ## Full weekly edition
 
@@ -55,7 +55,7 @@ The full edition event is charged once only after the Actor downloads, parses, a
 | `max-total-charge-usd` | `0.10` | Hard cap for the entire run. Full editions require at least `9.25`. |
 | `output-file` | `behavioral-health-practices.json` | JSON destination inside the workflow workspace. |
 
-The action returns `record-count` and `output-file` outputs. Uploading or committing the file is an explicit workflow choice; this action does neither automatically.
+The action returns `record-count` and `output-file` outputs and writes a source-linked GitHub workflow summary. Uploading or committing the file is an explicit workflow choice; this action does neither automatically.
 
 ## What the data means
 

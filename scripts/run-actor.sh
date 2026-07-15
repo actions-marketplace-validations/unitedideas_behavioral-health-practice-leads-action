@@ -24,8 +24,8 @@ if [[ "$preview" == "false" && -z "${APIFY_TOKEN:-}" ]]; then
   echo "APIFY_TOKEN is required for a full edition. Store it as a GitHub Actions secret." >&2
   exit 2
 fi
-if [[ "$output_file" == *$'\n'* || -z "$output_file" ]]; then
-  echo "output-file must be a non-empty single-line path." >&2
+if [[ "$output_file" == *$'\n'* || "$output_file" == *$'\r'* || "$output_file" == *'`'* || -z "$output_file" ]]; then
+  echo "output-file must be a non-empty single-line path without backticks." >&2
   exit 2
 fi
 
@@ -34,6 +34,10 @@ trap 'rm -rf "$tmp_dir"' EXIT
 input_file="$tmp_dir/input.json"
 response_file="$tmp_dir/response.json"
 states_json="$(jq -Rn --arg states "$states" '$states | split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$"; "") | ascii_upcase | select(length > 0))')"
+if ! jq -e 'all(.[]; test("^[A-Z]{2}$"))' <<<"$states_json" >/dev/null; then
+  echo "states must contain only comma-separated two-letter state or territory codes." >&2
+  exit 2
+fi
 
 if [[ "$preview" == "true" ]]; then
   http_status="$({
@@ -75,10 +79,17 @@ if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
   exit 1
 fi
 if [[ "$preview" == "true" ]]; then
-  if ! jq -e '.receipt.schema_version == 1 and (.records | type == "array")' "$response_file" >/dev/null; then
+  if ! jq -e '
+    .receipt.schema_version == 1
+    and (.receipt.period.start | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+    and (.receipt.period.end | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+    and (.records | type == "array")
+  ' "$response_file" >/dev/null; then
     echo "The public preview did not match the versioned Practice Radar contract." >&2
     exit 1
   fi
+  preview_period_start="$(jq -r '.receipt.period.start' "$response_file")"
+  preview_period_end="$(jq -r '.receipt.period.end' "$response_file")"
   jq --argjson states "$states_json" \
     'if ($states | length) == 0 then .records else [.records[] | select(.state as $state | ($states | index($state)) != null)] end' \
     "$response_file" > "$tmp_dir/filtered.json"
@@ -95,5 +106,26 @@ record_count="$(jq 'length' "$output_file")"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   printf 'record-count=%s\n' "$record_count" >> "$GITHUB_OUTPUT"
   printf 'output-file=%s\n' "$output_file" >> "$GITHUB_OUTPUT"
+fi
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    if [[ "$preview" == "true" ]]; then
+      printf '## Behavioral-health NPI lead preview\n\n'
+      printf '**%s current sample records** were written to `%s`.\n\n' "$record_count" "$output_file"
+      printf -- '- CMS NPPES weekly period: **%s through %s**\n' "$preview_period_start" "$preview_period_end"
+      if [[ "$(jq 'length' <<<"$states_json")" -gt 0 ]]; then
+        printf -- '- State filter: **%s**\n' "$(jq -r 'join(", ")' <<<"$states_json")"
+      else
+        printf -- '- State filter: **all states represented in the public sample**\n'
+      fi
+      printf -- '- Source: [CMS NPPES downloadable files](https://download.cms.gov/nppes/NPI_Files.html)\n\n'
+      printf 'An NPI does not prove licensure, credentialing, active operation, service availability, demand, or buying intent. Verify every record before consequential use.\n\n'
+      printf '[Run the $9 full weekly edition on Apify](https://apify.com/actablesite/new-behavioral-health-practices-actor) when the sample fits. The buyer also pays bounded Apify platform usage.\n'
+    else
+      printf '## Behavioral-health NPI lead export\n\n'
+      printf '**%s full-edition records** were written to `%s` through the caller-funded, cost-capped Apify run.\n\n' "$record_count" "$output_file"
+      printf 'An NPI does not prove licensure, credentialing, active operation, service availability, demand, or buying intent. Verify every record before consequential use.\n'
+    fi
+  } >> "$GITHUB_STEP_SUMMARY"
 fi
 printf 'Wrote %s records to %s.\n' "$record_count" "$output_file"

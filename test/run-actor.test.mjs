@@ -48,6 +48,7 @@ test("free preview needs no token, filters states, and publishes action outputs"
   const { directory, bin } = await fixture();
   const output = path.join(directory, "result.json");
   const githubOutput = path.join(directory, "github-output.txt");
+  const githubSummary = path.join(directory, "github-summary.md");
   const result = await run({
     ...process.env,
     PATH: `${bin}:${process.env.PATH}`,
@@ -56,7 +57,7 @@ test("free preview needs no token, filters states, and publishes action outputs"
     MAX_TOTAL_CHARGE_USD: "0.10",
     OUTPUT_FILE: output,
     FAKE_CURL_BODY: JSON.stringify({
-      receipt: { schema_version: 1 },
+      receipt: { schema_version: 1, period: { start: "2026-06-29", end: "2026-07-05" } },
       records: [
         { npi: "123", state: "CA" },
         { npi: "456", state: "TX" },
@@ -65,10 +66,31 @@ test("free preview needs no token, filters states, and publishes action outputs"
     }),
     FAKE_CURL_STATUS: "200",
     GITHUB_OUTPUT: githubOutput,
+    GITHUB_STEP_SUMMARY: githubSummary,
   });
   assert.equal(result.code, 0, result.stderr);
   assert.equal(JSON.parse(await readFile(output, "utf8")).length, 2);
   assert.match(await readFile(githubOutput, "utf8"), /record-count=2/);
+  const summary = await readFile(githubSummary, "utf8");
+  assert.match(summary, /\*\*2 current sample records\*\*/);
+  assert.match(summary, /2026-06-29 through 2026-07-05/);
+  assert.match(summary, /State filter: \*\*CA, TX\*\*/);
+  assert.match(summary, /CMS NPPES downloadable files/);
+  assert.match(summary, /An NPI does not prove licensure/);
+  assert.match(summary, /\$9 full weekly edition on Apify/);
+});
+
+test("state filters reject non-code input before any request", async () => {
+  const { bin } = await fixture();
+  const result = await run({
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH}`,
+    PREVIEW: "true",
+    STATES: "CA,[link](https://example.com)",
+    MAX_TOTAL_CHARGE_USD: "0.10",
+  });
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /two-letter state or territory codes/);
 });
 
 test("full editions require an Apify token", async () => {
@@ -98,6 +120,32 @@ test("full runs fail closed below the disclosed charge cap", async () => {
   });
   assert.equal(result.code, 2);
   assert.match(result.stderr, /at least 9\.25/);
+});
+
+test("full editions publish a fulfillment summary without another purchase prompt", async () => {
+  const { directory, bin } = await fixture();
+  const output = path.join(directory, "result.json");
+  const capture = path.join(directory, "input.json");
+  const githubSummary = path.join(directory, "github-summary.md");
+  const result = await run({
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH}`,
+    APIFY_TOKEN: "test-fixture-token",
+    PREVIEW: "false",
+    STATES: "CA",
+    MAX_TOTAL_CHARGE_USD: "9.25",
+    OUTPUT_FILE: output,
+    CAPTURE_INPUT: capture,
+    FAKE_CURL_BODY: JSON.stringify([{ npi: "123", state: "CA" }]),
+    FAKE_CURL_STATUS: "200",
+    GITHUB_STEP_SUMMARY: githubSummary,
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(JSON.parse(await readFile(capture, "utf8")), { preview: false, states: ["CA"] });
+  const summary = await readFile(githubSummary, "utf8");
+  assert.match(summary, /\*\*1 full-edition records\*\*/);
+  assert.match(summary, /caller-funded, cost-capped Apify run/);
+  assert.doesNotMatch(summary, /Run the \$9 full weekly edition/);
 });
 
 test("HTTP failures do not publish a dataset", async () => {
