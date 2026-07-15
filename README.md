@@ -1,8 +1,8 @@
-# New behavioral-health practices in GitHub Actions
+# Behavioral-health NPI leads in GitHub Actions
 
-Export organizations that received a behavioral-health NPI in the latest CMS weekly file. The action runs [New Behavioral Health Practices Weekly](https://apify.com/actablesite/new-behavioral-health-practices-actor), waits for the dataset, and writes clean JSON inside your workflow.
+Download organizations that received a behavioral-health NPI in the latest CMS weekly file. The free preview needs no account, token, or payment and writes 15 current records as clean JSON inside your workflow.
 
-The default is a deterministic 15-row preview with a $0.10 hard run cap. A full edition charges one $9 Apify event plus small platform usage and requires an explicit higher cap.
+When the sample fits, the full edition runs [New Behavioral Health Practices Weekly](https://apify.com/actablesite/new-behavioral-health-practices-actor) in the buyer's Apify account. It charges one $9 event plus small platform usage and refuses to run without both a token and an explicit $9.25 total-charge cap.
 
 ## Quick start: free preview
 
@@ -20,7 +20,6 @@ jobs:
       - id: practices
         uses: unitedideas/behavioral-health-practice-leads-action@v1
         with:
-          apify-token: ${{ secrets.APIFY_TOKEN }}
           states: CA,TX
       - uses: actions/upload-artifact@v4
         with:
@@ -28,11 +27,11 @@ jobs:
           path: ${{ steps.practices.outputs.output-file }}
 ```
 
-Create an Apify API token in your own account and store it as the repository secret `APIFY_TOKEN`. The action sends it only in the Apify authorization header and never prints it.
+The preview downloads the current, versioned 15-row sample from the public [Practice Radar data repository](https://github.com/unitedideas/practice-radar-data). It does not create an Apify run or incur a charge.
 
 ## Full weekly edition
 
-Set `preview: false` and explicitly raise the cap:
+Create an Apify API token in your own account, store it as the repository secret `APIFY_TOKEN`, set `preview: false`, and explicitly raise the cap:
 
 ```yaml
       - id: practices
@@ -50,7 +49,7 @@ The full edition event is charged once only after the Actor downloads, parses, a
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `apify-token` | required | Your Apify API token, supplied through GitHub Secrets. |
+| `apify-token` | empty | Your Apify API token, required only for a full edition and supplied through GitHub Secrets. |
 | `states` | empty | Optional comma-separated two-letter state or territory codes. |
 | `preview` | `true` | Return the deterministic 15-row preview. |
 | `max-total-charge-usd` | `0.10` | Hard cap for the entire run. Full editions require at least `9.25`. |
@@ -66,10 +65,11 @@ An NPI does not prove licensure, credentialing, active operation, independence, 
 
 ## Security and operating boundary
 
-- Use the least-privilege Apify token available to your account and store it only in GitHub Secrets.
+- The free preview reads only the public, versioned Practice Radar sample and needs no credential.
+- For a full edition, use the least-privilege Apify token available to your account and store it only in GitHub Secrets.
 - GitHub does not provide repository secrets to workflows triggered from untrusted forks by default.
 - Every call has a caller-selected total charge cap and a five-minute timeout.
-- The action does not send email, contact organizations, enrich public records, or transmit the dataset anywhere except your selected Apify account and workflow runner.
+- The action does not send email, contact organizations, enrich public records, or transmit the dataset anywhere except the public preview source, your selected Apify account for a full edition, and the workflow runner.
 
 ## License
 

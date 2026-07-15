@@ -1,5 +1,5 @@
-name: New Behavioral Health Practices Weekly
-description: Export newly enumerated behavioral-health organization NPIs from the latest CMS weekly file through a cost-capped Apify run.
+name: Behavioral Health NPI Leads Weekly
+description: Download newly enumerated behavioral-health organization NPI leads from the latest CMS weekly file, with a free no-token preview.
 author: ActableSite
 
 branding:
@@ -8,8 +8,9 @@ branding:
 
 inputs:
   apify-token:
-    description: Apify API token. Store it as a GitHub Actions secret.
-    required: true
+    description: Apify API token for a paid full edition. Not needed for the free preview.
+    required: false
+    default: ""
   states:
     description: Optional comma-separated state or territory codes, such as CA,TX,WA.
     required: false
@@ -39,7 +40,7 @@ runs:
   using: composite
   steps:
     - id: run
-      name: Run the cost-capped Actor
+      name: Export current weekly data
       shell: bash
       env:
         APIFY_TOKEN: ${{ inputs.apify-token }}
