@@ -1,0 +1,27 @@
+name: Production preview
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 14 * * 2"
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - id: leads
+        uses: unitedideas/behavioral-health-practice-leads-action@v1
+        with:
+          states: CA,TX
+          output-file: behavioral-health-practices.json
+      - name: Verify delivered preview
+        env:
+          RECORD_COUNT: ${{ steps.leads.outputs.record-count }}
+          OUTPUT_FILE: ${{ steps.leads.outputs.output-file }}
+        run: |
+          test "$RECORD_COUNT" -ge 1
+          test "$OUTPUT_FILE" = "behavioral-health-practices.json"
+          jq -e --argjson expected "$RECORD_COUNT" 'type == "array" and length == $expected and all(.[]; .state == "CA" or .state == "TX")' "$OUTPUT_FILE"
